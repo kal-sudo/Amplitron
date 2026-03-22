@@ -117,35 +117,73 @@ jobs:
         run-id: ${{ github.event.workflow_run.id }}
         github-token: ${{ secrets.GITHUB_TOKEN }}
 
+    - name: Create App Icon (icns)
+      run: |
+        mkdir -p icon.iconset
+        # Rasterize SVG to multiple sizes using sips
+        for size in 16 32 64 128 256 512; do
+          sips -z $size $size assets/favicon.ico --out icon.iconset/icon_${size}x${size}.png 2>/dev/null || true
+        done
+        # Generate from a 512px PNG as base
+        sips -s format png -z 512 512 assets/favicon.ico --out /tmp/icon_base.png 2>/dev/null || true
+        if [ -f /tmp/icon_base.png ]; then
+          for size in 16 32 64 128 256 512; do
+            sips -z $size $size /tmp/icon_base.png --out icon.iconset/icon_${size}x${size}.png
+            double=$((size * 2))
+            if [ $double -le 1024 ]; then
+              sips -z $double $double /tmp/icon_base.png --out icon.iconset/icon_${size}x${size}@2x.png
+            fi
+          done
+          iconutil -c icns icon.iconset -o icon.icns 2>/dev/null || true
+        fi
+        ls -la icon.icns 2>/dev/null || echo "icns generation failed, will skip icon"
+
     - name: Create App Bundle
       run: |
         mkdir -p Amplitron.app/Contents/MacOS
         mkdir -p Amplitron.app/Contents/Resources
+        mkdir -p Amplitron.app/Contents/Frameworks
+
+        # Copy binary
         cp artifacts/macos/guitar-amp Amplitron.app/Contents/MacOS/Amplitron
         chmod +x Amplitron.app/Contents/MacOS/Amplitron
+
+        # Copy bundled dylibs
+        cp artifacts/macos/libportaudio.2.dylib Amplitron.app/Contents/Frameworks/ 2>/dev/null || true
+        cp artifacts/macos/libSDL2-2.0.0.dylib Amplitron.app/Contents/Frameworks/ 2>/dev/null || true
+
+        # Fix rpaths to look in Frameworks
+        install_name_tool -change @executable_path/libportaudio.2.dylib @executable_path/../Frameworks/libportaudio.2.dylib Amplitron.app/Contents/MacOS/Amplitron 2>/dev/null || true
+        install_name_tool -change @executable_path/libSDL2-2.0.0.dylib @executable_path/../Frameworks/libSDL2-2.0.0.dylib Amplitron.app/Contents/MacOS/Amplitron 2>/dev/null || true
+
+        # Copy assets next to binary for SDL_GetBasePath
         cp -r assets Amplitron.app/Contents/MacOS/assets || true
-        cp -r assets Amplitron.app/Contents/Resources/ || true
+
+        # Copy icon
+        cp icon.icns Amplitron.app/Contents/Resources/icon.icns 2>/dev/null || true
+
+        # Write Info.plist (no leading whitespace!)
         VERSION="${{ needs.create-release.outputs.version }}"
-        cat > Amplitron.app/Contents/Info.plist <<PLIST
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-          <key>CFBundleExecutable</key><string>Amplitron</string>
-          <key>CFBundleIdentifier</key><string>com.amplitron.app</string>
-          <key>CFBundleName</key><string>Amplitron</string>
-          <key>CFBundleVersion</key><string>${VERSION}</string>
-          <key>CFBundleShortVersionString</key><string>${VERSION}</string>
-          <key>CFBundlePackageType</key><string>APPL</string>
-          <key>CFBundleIconFile</key><string>icon</string>
-          <key>NSHighResolutionCapable</key><true/>
-          <key>NSMicrophoneUsageDescription</key><string>Amplitron needs microphone access for guitar input.</string>
-        </dict>
-        </plist>
-        PLIST
+        /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Amplitron" Amplitron.app/Contents/Info.plist
+        /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.amplitron.app" Amplitron.app/Contents/Info.plist
+        /usr/libexec/PlistBuddy -c "Add :CFBundleName string Amplitron" Amplitron.app/Contents/Info.plist
+        /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${VERSION}" Amplitron.app/Contents/Info.plist
+        /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${VERSION}" Amplitron.app/Contents/Info.plist
+        /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string APPL" Amplitron.app/Contents/Info.plist
+        /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string icon" Amplitron.app/Contents/Info.plist
+        /usr/libexec/PlistBuddy -c "Add :NSHighResolutionCapable bool true" Amplitron.app/Contents/Info.plist
+        /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 'Amplitron needs microphone access for guitar input.'" Amplitron.app/Contents/Info.plist
+        /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 10.15" Amplitron.app/Contents/Info.plist
+
+        # Verify
+        otool -L Amplitron.app/Contents/MacOS/Amplitron
+        cat Amplitron.app/Contents/Info.plist
 
     - name: Ad-hoc Codesign
-      run: codesign --force --deep --sign - Amplitron.app
+      run: |
+        codesign --force --deep --sign - Amplitron.app/Contents/Frameworks/libportaudio.2.dylib 2>/dev/null || true
+        codesign --force --deep --sign - Amplitron.app/Contents/Frameworks/libSDL2-2.0.0.dylib 2>/dev/null || true
+        codesign --force --deep --sign - Amplitron.app
 
     - name: Create DMG
       run: |

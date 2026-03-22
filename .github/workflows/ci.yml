@@ -68,12 +68,26 @@ jobs:
     - name: Run Tests
       run: cd build && ./amplitron-tests
 
+    - name: Collect Binaries
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        mkdir -p staging
+        cp build/guitar-amp staging/
+        HOMEBREW_PREFIX=$(brew --prefix)
+        cp "$HOMEBREW_PREFIX/lib/libportaudio.2.dylib" staging/
+        cp "$HOMEBREW_PREFIX/lib/libSDL2-2.0.0.dylib" staging/
+        # Fix rpaths so binary finds dylibs next to itself
+        install_name_tool -change "$HOMEBREW_PREFIX/lib/libportaudio.2.dylib" @executable_path/libportaudio.2.dylib staging/guitar-amp
+        install_name_tool -change "$HOMEBREW_PREFIX/lib/libSDL2-2.0.0.dylib" @executable_path/libSDL2-2.0.0.dylib staging/guitar-amp
+        otool -L staging/guitar-amp
+        ls -la staging/
+
     - name: Upload Build
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       uses: actions/upload-artifact@v4
       with:
         name: macos-build
-        path: build/guitar-amp
+        path: staging/
         retention-days: 1
 
   test-windows:
