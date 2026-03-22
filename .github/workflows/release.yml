@@ -148,13 +148,43 @@ jobs:
         cp artifacts/macos/guitar-amp Amplitron.app/Contents/MacOS/Amplitron
         chmod +x Amplitron.app/Contents/MacOS/Amplitron
 
-        # Copy bundled dylibs
-        cp artifacts/macos/libportaudio.2.dylib Amplitron.app/Contents/Frameworks/ 2>/dev/null || true
-        cp artifacts/macos/libSDL2-2.0.0.dylib Amplitron.app/Contents/Frameworks/ 2>/dev/null || true
+        # Copy ALL bundled dylibs from CI
+        for dylib in artifacts/macos/*.dylib; do
+          [ -f "$dylib" ] || continue
+          libname=$(basename "$dylib")
+          echo "Copying dylib: $libname"
+          cp "$dylib" Amplitron.app/Contents/Frameworks/
+          chmod 644 "Amplitron.app/Contents/Frameworks/$libname"
+        done
 
-        # Fix rpaths to look in Frameworks
-        install_name_tool -change @executable_path/libportaudio.2.dylib @executable_path/../Frameworks/libportaudio.2.dylib Amplitron.app/Contents/MacOS/Amplitron 2>/dev/null || true
-        install_name_tool -change @executable_path/libSDL2-2.0.0.dylib @executable_path/../Frameworks/libSDL2-2.0.0.dylib Amplitron.app/Contents/MacOS/Amplitron 2>/dev/null || true
+        # Rewrite binary rpaths: @executable_path/X -> @executable_path/../Frameworks/X
+        otool -L Amplitron.app/Contents/MacOS/Amplitron | tail -n +2 | awk '{print $1}' | while read -r lib; do
+          case "$lib" in
+            @executable_path/*)
+              libname=$(basename "$lib")
+              install_name_tool -change "$lib" "@executable_path/../Frameworks/$libname" Amplitron.app/Contents/MacOS/Amplitron
+              echo "Rewritten: $lib -> @executable_path/../Frameworks/$libname"
+              ;;
+          esac
+        done
+
+        # Rewrite inter-dylib references in Frameworks
+        for fw in Amplitron.app/Contents/Frameworks/*.dylib; do
+          [ -f "$fw" ] || continue
+          libname=$(basename "$fw")
+          install_name_tool -id "@rpath/$libname" "$fw" 2>/dev/null || true
+          otool -L "$fw" | tail -n +2 | awk '{print $1}' | while read -r lib; do
+            case "$lib" in
+              @executable_path/*)
+                depname=$(basename "$lib")
+                install_name_tool -change "$lib" "@rpath/$depname" "$fw" 2>/dev/null || true
+                ;;
+            esac
+          done
+        done
+
+        # Add rpath to binary so it finds Frameworks
+        install_name_tool -add_rpath @executable_path/../Frameworks Amplitron.app/Contents/MacOS/Amplitron 2>/dev/null || true
 
         # Copy assets next to binary for SDL_GetBasePath
         cp -r assets Amplitron.app/Contents/MacOS/assets || true
@@ -162,7 +192,7 @@ jobs:
         # Copy icon
         cp icon.icns Amplitron.app/Contents/Resources/icon.icns 2>/dev/null || true
 
-        # Write Info.plist (no leading whitespace!)
+        # Write Info.plist
         VERSION="${{ needs.create-release.outputs.version }}"
         /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Amplitron" Amplitron.app/Contents/Info.plist
         /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.amplitron.app" Amplitron.app/Contents/Info.plist
@@ -175,15 +205,24 @@ jobs:
         /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string 'Amplitron needs microphone access for guitar input.'" Amplitron.app/Contents/Info.plist
         /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 10.15" Amplitron.app/Contents/Info.plist
 
-        # Verify
+        echo "=== Final binary links ==="
         otool -L Amplitron.app/Contents/MacOS/Amplitron
+        echo "=== Frameworks ==="
+        ls -la Amplitron.app/Contents/Frameworks/
+        echo "=== Info.plist ==="
         cat Amplitron.app/Contents/Info.plist
 
     - name: Ad-hoc Codesign
       run: |
-        codesign --force --deep --sign - Amplitron.app/Contents/Frameworks/libportaudio.2.dylib 2>/dev/null || true
-        codesign --force --deep --sign - Amplitron.app/Contents/Frameworks/libSDL2-2.0.0.dylib 2>/dev/null || true
+        # Sign each framework dylib first
+        for fw in Amplitron.app/Contents/Frameworks/*.dylib; do
+          [ -f "$fw" ] || continue
+          codesign --force --sign - "$fw"
+        done
+        # Then sign the whole app
         codesign --force --deep --sign - Amplitron.app
+        # Verify
+        codesign --verify --verbose Amplitron.app
 
     - name: Create DMG
       run: |

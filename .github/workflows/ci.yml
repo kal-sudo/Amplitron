@@ -68,18 +68,55 @@ jobs:
     - name: Run Tests
       run: cd build && ./amplitron-tests
 
-    - name: Collect Binaries
+    - name: Bundle Dylibs
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       run: |
         mkdir -p staging
         cp build/guitar-amp staging/
-        HOMEBREW_PREFIX=$(brew --prefix)
-        cp "$HOMEBREW_PREFIX/lib/libportaudio.2.dylib" staging/
-        cp "$HOMEBREW_PREFIX/lib/libSDL2-2.0.0.dylib" staging/
-        # Fix rpaths so binary finds dylibs next to itself
-        install_name_tool -change "$HOMEBREW_PREFIX/lib/libportaudio.2.dylib" @executable_path/libportaudio.2.dylib staging/guitar-amp
-        install_name_tool -change "$HOMEBREW_PREFIX/lib/libSDL2-2.0.0.dylib" @executable_path/libSDL2-2.0.0.dylib staging/guitar-amp
+
+        echo "=== Original linked libraries ==="
         otool -L staging/guitar-amp
+
+        # Find and bundle all non-system dylibs (Homebrew, local, etc.)
+        bundle_dylib() {
+          local binary="$1"
+          otool -L "$binary" | tail -n +2 | awk '{print $1}' | while read -r lib; do
+            # Skip system/framework libs
+            case "$lib" in
+              /usr/lib/*|/System/*|@executable_path/*|@rpath/*|@loader_path/*) continue ;;
+            esac
+            local libname=$(basename "$lib")
+            if [ ! -f "staging/$libname" ]; then
+              echo "Bundling: $lib -> staging/$libname"
+              cp -L "$lib" "staging/$libname"
+              chmod 644 "staging/$libname"
+              # Recursively check this dylib's own dependencies
+              bundle_dylib "staging/$libname"
+            fi
+            # Fix the reference in the binary
+            install_name_tool -change "$lib" "@executable_path/$libname" "$binary" 2>/dev/null || true
+          done
+        }
+
+        bundle_dylib staging/guitar-amp
+
+        # Also fix inter-dylib references
+        for dylib in staging/*.dylib; do
+          [ -f "$dylib" ] || continue
+          otool -L "$dylib" | tail -n +2 | awk '{print $1}' | while read -r lib; do
+            case "$lib" in
+              /usr/lib/*|/System/*|@executable_path/*|@rpath/*|@loader_path/*) continue ;;
+            esac
+            local libname=$(basename "$lib")
+            install_name_tool -change "$lib" "@executable_path/$libname" "$dylib" 2>/dev/null || true
+          done
+          # Fix the dylib's own id
+          install_name_tool -id "@executable_path/$(basename $dylib)" "$dylib" 2>/dev/null || true
+        done
+
+        echo "=== After bundling ==="
+        otool -L staging/guitar-amp
+        echo "=== Staged files ==="
         ls -la staging/
 
     - name: Upload Build
