@@ -194,8 +194,12 @@ jobs:
     - name: Setup Emscripten
       if: steps.emsdk-cache.outputs.cache-hit != 'true'
       run: |
-        git clone https://github.com/emscripten-core/emsdk.git
-        cd emsdk
+        if [ -d emsdk ]; then
+          cd emsdk && git pull
+        else
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+        fi
         ./emsdk install $EMSDK_VERSION
         ./emsdk activate $EMSDK_VERSION
 
