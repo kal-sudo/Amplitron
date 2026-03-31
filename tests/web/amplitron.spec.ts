@@ -281,8 +281,12 @@ test.describe('SharedArrayBuffer & Service Worker', () => {
   }) => {
     await page.goto('/');
 
-    // Wait for the service worker to become active (or confirm there is none registered)
+    // If the server already sends COOP/COEP headers the page is cross-origin
+    // isolated from the start and coi-serviceworker.js skips SW registration,
+    // so navigator.serviceWorker.ready would hang forever.  Exit early in that
+    // case; otherwise wait for the service worker to become active.
     await page.waitForFunction(async () => {
+      if (window.crossOriginIsolated) return true;
       try {
         await navigator.serviceWorker.ready;
         return true;
