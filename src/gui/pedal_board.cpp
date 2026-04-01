@@ -291,17 +291,14 @@ void PedalBoard::render_signal_chain() {
 
     for (int vi = 0; vi < static_cast<int>(visible.size()); ++vi) {
         int i = visible[vi];
-        ImGui::SetCursorScreenPos(ImVec2(pedal_x, origin.y + 5));
-
-        if (widgets_[i]->render()) {
-            remove_idx = i;
-        }
-
-        // Drag-and-drop reordering
         ImVec2 pedal_min = ImVec2(pedal_x, origin.y + 5);
+
+        // Drag-and-drop reordering — render the full-pedal hit area FIRST as a
+        // background layer, then allow the widget's knobs/switches to overlap it.
         ImGui::SetCursorScreenPos(pedal_min);
         char dnd_id[32];
         snprintf(dnd_id, sizeof(dnd_id), "##dnd_%d", i);
+        ImGui::SetNextItemAllowOverlap();
         ImGui::InvisibleButton(dnd_id, ImVec2(Theme::PEDAL_WIDTH, Theme::PEDAL_HEIGHT));
 
         bool is_amp = std::strcmp(widgets_[i]->get_effect()->name(), "Amp Sim") == 0;
@@ -321,6 +318,13 @@ void PedalBoard::render_signal_chain() {
                 }
                 ImGui::EndDragDropTarget();
             }
+        }
+
+        // Render the pedal widget on top — its interactive elements take priority
+        // over the DND background button thanks to SetNextItemAllowOverlap above.
+        ImGui::SetCursorScreenPos(pedal_min);
+        if (widgets_[i]->render()) {
+            remove_idx = i;
         }
 
         // Connection dot between pedals

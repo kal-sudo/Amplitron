@@ -286,6 +286,7 @@ bool PedalWidget::render() {
 
             // Clickable area to toggle mute
             ImGui::SetCursorScreenPos(ImVec2(cx - ml_size.x * 0.5f, display_y));
+            ImGui::SetNextItemAllowOverlap();
             ImGui::InvisibleButton("##tuner_mute_toggle", ml_size);
             if (ImGui::IsItemClicked()) {
                 float new_val = mute_on ? 0.0f : 1.0f;
@@ -345,10 +346,12 @@ bool PedalWidget::render() {
         char label[64];
         snprintf(label, sizeof(label), "##knob_%s_%d_%d", effect_->name(), index_, pi);
 
-        // Invisible interaction area centered on knob
+        // Invisible interaction area centered on knob — allow overlap so knobs
+        // near pedal edges don't block adjacent pedals' controls.
         ImGui::SetCursorScreenPos(ImVec2(
             knob_center.x - knob_hit_size * 0.5f,
             knob_center.y - knob_hit_size * 0.5f));
+        ImGui::SetNextItemAllowOverlap();
         ImGui::InvisibleButton(label, ImVec2(knob_hit_size, knob_hit_size));
 
         bool is_hovered = ImGui::IsItemHovered();
@@ -577,6 +580,7 @@ bool PedalWidget::render() {
         float led_x = p0.x + pedal_width - 25;
         float led_y = p0.y + 20;
         ImGui::SetCursorScreenPos(ImVec2(led_x - 10, led_y - 10));
+        ImGui::SetNextItemAllowOverlap();
         ImGui::InvisibleButton("##led_tip", ImVec2(20, 20));
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip(enabled ? "Effect active" : "Effect bypassed");
@@ -596,6 +600,7 @@ bool PedalWidget::render() {
         dl->AddCircleFilled(sw_center, 12,
             enabled ? Theme::SWITCH_ACTIVE : Theme::SWITCH_IDLE);
 
+        ImGui::SetNextItemAllowOverlap();
         ImGui::InvisibleButton("##switch", ImVec2(50, 30));
         if (ImGui::IsItemClicked()) {
             bool new_enabled = !enabled;
