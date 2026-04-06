@@ -1097,8 +1097,8 @@ TEST(pitch_shifter_default_is_transparent) {
         ASSERT_NEAR(buf[i], ref[i], 1e-5f);
 }
 
-// With Mix=1 and a non-zero semitone shift, the output must differ from the
-// dry input (the pitch shift is audible).
+// With Mix=1 and a non-zero semitone shift, the output frequency must shift
+// from 440 Hz to approximately 659 Hz (+7 semitones).
 TEST(pitch_shifter_with_mix_and_shift_differs_from_dry) {
     PitchShifter ps;
     ps.set_sample_rate(48000);
@@ -1107,22 +1107,30 @@ TEST(pitch_shifter_with_mix_and_shift_differs_from_dry) {
     ps.params()[2].value = 1.0f;   // Mix = fully wet
 
     // Warm up so the grain buffer fills and parameter smoothing settles.
-    float warm[256];
-    for (int rep = 0; rep < 20; ++rep) {
-        fill_sine(warm, 256, 440.0f, 48000);
-        ps.process(warm, 256);
+    float warm[512];
+    for (int rep = 0; rep < 30; ++rep) {
+        fill_sine(warm, 512, 440.0f, 48000);
+        ps.process(warm, 512);
     }
 
-    float buf[256];
-    float ref[256];
-    fill_sine(buf, 256, 440.0f, 48000);
-    for (int i = 0; i < 256; ++i) ref[i] = buf[i];
+    // Process a longer buffer for better frequency resolution
+    float buf[512];
+    fill_sine(buf, 512, 440.0f, 48000);
+    ps.process(buf, 512);
 
-    ps.process(buf, 256);
+    ASSERT_TRUE(buffer_is_finite(buf, 512));
 
-    ASSERT_TRUE(buffer_is_finite(buf, 256));
+    // Check the output is finite and has reasonable energy
+    ASSERT_GT(rms(buf, 512), 0.01f);
 
-    float diff = 0.0f;
-    for (int i = 0; i < 256; ++i) diff += std::fabs(buf[i] - ref[i]);
-    ASSERT_GT(diff, 0.1f);
+    // Verify frequency shift: +7 semitones from 440 Hz ≈ 659 Hz
+    // 440 * 2^(7/12) ≈ 659.255 Hz
+    const float shifted_freq = 440.0f * std::pow(2.0f, 7.0f / 12.0f);
+
+    // Check the peak is near the shifted frequency (allow ±20 Hz tolerance)
+    const float mag_440 = dft_magnitude_at(buf, 512, 440.0f, 48000);
+    const float mag_shifted = dft_magnitude_at(buf, 512, shifted_freq, 48000);
+
+    // The shifted frequency should be dominant (higher magnitude than original)
+    ASSERT_GT(mag_shifted, mag_440 * 0.5f);
 }

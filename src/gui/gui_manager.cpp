@@ -325,6 +325,7 @@ void GuiManager::render_menu_bar() {
                 gui_presets_.delete_preset_by_index(gui_presets_.selected_preset_index());
             }
             ImGui::Separator();
+#ifndef EMSCRIPTEN
             if (ImGui::MenuItem("Change Presets Directory...")) {
                 std::string chosen = show_folder_dialog("Select Presets Directory");
                 if (!chosen.empty()) {
@@ -333,6 +334,12 @@ void GuiManager::render_menu_bar() {
                     gui_presets_.refresh_presets(false);
                 }
             }
+            if (ImGui::MenuItem("Reset to Default Presets Directory")) {
+                PresetManager::set_presets_dir("");
+                PresetManager::save_config();
+                gui_presets_.refresh_presets(false);
+            }
+#endif
             ImGui::Separator();
             if (ImGui::MenuItem("Settings")) show_settings_ = true;
             ImGui::Separator();

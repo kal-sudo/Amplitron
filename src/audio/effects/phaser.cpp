@@ -87,7 +87,6 @@ void Phaser::process(float* buffer, int num_samples) {
 
 void Phaser::process_stereo(float* left, float* right, int num_samples) {
     if (!enabled_) {
-        std::memcpy(right, left, static_cast<size_t>(num_samples) * sizeof(float));
         return;
     }
 
@@ -101,7 +100,8 @@ void Phaser::process_stereo(float* left, float* right, int num_samples) {
     const float log_ratio = std::log(20.0f);
 
     for (int i = 0; i < num_samples; ++i) {
-        const float dry = left[i];
+        const float dry_l = left[i];
+        const float dry_r = right[i];
 
         // Left LFO
         const float lfo_l = 0.5f * (1.0f + std::sin(TWO_PI * lfo_phase_));
@@ -118,7 +118,7 @@ void Phaser::process_stereo(float* left, float* right, int num_samples) {
         const float apc_r = (t_r - 1.0f) / (t_r + 1.0f);
 
         // Left APF cascade
-        float x_l = dry + feedback * feedback_state_;
+        float x_l = dry_l + feedback * feedback_state_;
         for (int s = 0; s < nstages; ++s) {
             const float y = apc_l * (x_l - apf_yprev_[s]) + apf_xprev_[s];
             apf_xprev_[s] = x_l;
@@ -128,7 +128,7 @@ void Phaser::process_stereo(float* left, float* right, int num_samples) {
         feedback_state_ = x_l;
 
         // Right APF cascade
-        float x_r = dry + feedback * feedback_state_r_;
+        float x_r = dry_r + feedback * feedback_state_r_;
         for (int s = 0; s < nstages; ++s) {
             const float y = apc_r * (x_r - apf_yprev_r_[s]) + apf_xprev_r_[s];
             apf_xprev_r_[s] = x_r;
@@ -137,8 +137,8 @@ void Phaser::process_stereo(float* left, float* right, int num_samples) {
         }
         feedback_state_r_ = x_r;
 
-        left[i]  = dry * (1.0f - mix) + x_l * mix;
-        right[i] = dry * (1.0f - mix) + x_r * mix;
+        left[i]  = dry_l * (1.0f - mix) + x_l * mix;
+        right[i] = dry_r * (1.0f - mix) + x_r * mix;
 
         lfo_phase_ += lfo_inc;
         if (lfo_phase_ >= 1.0f) lfo_phase_ -= 1.0f;

@@ -86,7 +86,6 @@ void Flanger::process(float* buffer, int num_samples) {
 
 void Flanger::process_stereo(float* left, float* right, int num_samples) {
     if (!enabled_) {
-        std::memcpy(right, left, static_cast<size_t>(num_samples) * sizeof(float));
         return;
     }
 
@@ -98,7 +97,8 @@ void Flanger::process_stereo(float* left, float* right, int num_samples) {
     const float lfo_inc  = rate / static_cast<float>(sample_rate_);
 
     for (int i = 0; i < num_samples; ++i) {
-        const float dry = left[i];
+        const float dry_l = left[i];
+        const float dry_r = right[i];
 
         // Left LFO
         const float lfo_l      = 0.5f * (1.0f + std::sin(TWO_PI * lfo_phase_));
@@ -113,8 +113,8 @@ void Flanger::process_stereo(float* left, float* right, int num_samples) {
         const float delayed_l = delay_buffer_[ip_l % max_delay_samples_] * (1.0f - f_l) +
                                 delay_buffer_[(ip_l + 1) % max_delay_samples_] * f_l;
 
-        delay_buffer_[write_pos_] = clamp(dry + feedback * delayed_l, -2.0f, 2.0f);
-        left[i] = dry * (1.0f - mix) + delayed_l * mix;
+        delay_buffer_[write_pos_] = clamp(dry_l + feedback * delayed_l, -2.0f, 2.0f);
+        left[i] = dry_l * (1.0f - mix) + delayed_l * mix;
 
         // Right LFO — 180° offset (0.5 of normalised cycle)
         const float lfo_r      = 0.5f * (1.0f + std::sin(TWO_PI * (lfo_phase_ + 0.5f)));
@@ -129,8 +129,8 @@ void Flanger::process_stereo(float* left, float* right, int num_samples) {
         const float delayed_r = delay_buffer_r_[ip_r % max_delay_samples_] * (1.0f - f_r) +
                                 delay_buffer_r_[(ip_r + 1) % max_delay_samples_] * f_r;
 
-        delay_buffer_r_[write_pos_r_] = clamp(dry + feedback * delayed_r, -2.0f, 2.0f);
-        right[i] = dry * (1.0f - mix) + delayed_r * mix;
+        delay_buffer_r_[write_pos_r_] = clamp(dry_r + feedback * delayed_r, -2.0f, 2.0f);
+        right[i] = dry_r * (1.0f - mix) + delayed_r * mix;
 
         write_pos_   = (write_pos_   + 1) % max_delay_samples_;
         write_pos_r_ = (write_pos_r_ + 1) % max_delay_samples_;

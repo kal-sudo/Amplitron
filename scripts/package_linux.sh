@@ -1,6 +1,8 @@
 #!/bin/bash
 # Linux Release Packaging Script
 
+set -e  # Exit on any error
+
 VERSION=${1:-dev}
 
 echo "Packaging Amplitron for Linux..."

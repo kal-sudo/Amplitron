@@ -63,7 +63,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: linux-build
-        path: build/amplitron
+        path: build/Amplitron
         retention-days: 1
 
   test-macos:
@@ -111,13 +111,13 @@ jobs:
       run: |
         set -e
         mkdir -p staging
-        cp build/amplitron staging/
+        cp build/Amplitron staging/
 
         echo "=== Original linked libraries ==="
-        otool -L staging/amplitron
+        otool -L staging/Amplitron
 
         # Step 1: Find all non-system dylibs the binary links to (file-based, no pipe subshell)
-        otool -L staging/amplitron | tail -n +2 | awk '{print $1}' > /tmp/deps.txt
+        otool -L staging/Amplitron | tail -n +2 | awk '{print $1}' > /tmp/deps.txt
         cat /tmp/deps.txt
 
         # Step 2: Copy each non-system dylib and fix the reference in the binary
@@ -130,7 +130,7 @@ jobs:
           cp -L "$lib" "staging/$libname"
           chmod 644 "staging/$libname"
           echo ">>> Fixing reference: $lib -> @executable_path/$libname"
-          install_name_tool -change "$lib" "@executable_path/$libname" staging/amplitron
+          install_name_tool -change "$lib" "@executable_path/$libname" staging/Amplitron
         done < /tmp/deps.txt
 
         # Step 3: For each bundled dylib, fix ITS non-system dependencies too
@@ -158,7 +158,7 @@ jobs:
 
         echo ""
         echo "=== After bundling ==="
-        otool -L staging/amplitron
+        otool -L staging/Amplitron
         echo "=== Dylib links ==="
         for f in staging/*.dylib; do
           [ -f "$f" ] || continue

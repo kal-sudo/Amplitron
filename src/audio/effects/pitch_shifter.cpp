@@ -36,8 +36,8 @@ void PitchShifter::set_sample_rate(int sample_rate) {
 
 float PitchShifter::read_linear(float phase) const {
     // Wrap phase into [0, buf_size_)
-    while (phase < 0.0f) phase += buf_size_;
-    while (phase >= buf_size_) phase -= buf_size_;
+    phase = std::fmod(phase, static_cast<float>(buf_size_));
+    if (phase < 0.0f) phase += buf_size_;
 
     int pos0 = static_cast<int>(phase);
     int pos1 = (pos0 + 1) % buf_size_;

@@ -232,7 +232,7 @@ std::vector<AudioDeviceInfo> AudioEngine::get_input_devices() const {
 }
 
 std::vector<AudioDeviceInfo> AudioEngine::get_output_devices() const {
-    return {{0, "Browser Audio Output", 0, 1, 48000.0, false}};
+    return {{0, "Browser Audio Output", 0, 2, 48000.0, false}};
 }
 
 bool AudioEngine::set_input_device(int) { return true; }
