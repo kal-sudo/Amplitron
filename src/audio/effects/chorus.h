@@ -26,6 +26,7 @@ private:
     float lfo_phase_ = 0.0f;
     int max_delay_samples_ = 0;
     float last_bpm_=0.0f; //shortcut if bpm not changed.
+    float smoothed_rate_ = 1.5f;
 };
 
 } // namespace Amplitron

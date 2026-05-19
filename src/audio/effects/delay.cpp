@@ -68,6 +68,7 @@ void Delay::reset() {
 }
 
 void Delay::set_transport_state(float bpm){
+    if(bpm <= 0.0f || !std::isfinite(bpm)) return;
     if(bpm == last_bpm_) return;
     last_bpm_=bpm;
 

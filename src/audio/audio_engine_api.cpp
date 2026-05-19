@@ -86,16 +86,10 @@ float AudioEngine::get_bpm() const{
 }
 
 void AudioEngine::set_bpm(float bpm){
+    if (!std::isfinite(bpm) || bpm <= 0.0f) return;
+    bpm = std::clamp(bpm, 20.0f, 300.0f);
     //save new tempo
     global_bpm_.store(bpm, std::memory_order_relaxed);
-    //lock pedalboard during update
-    std::lock_guard<std::mutex> lock(effect_mutex_);
-    //broadcast_tempo
-    for(auto& fx : effects_){
-        if(fx){
-            fx->set_transport_state(bpm);
-        }
-    }
 }
 
 } // namespace Amplitron

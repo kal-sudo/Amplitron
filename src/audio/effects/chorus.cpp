@@ -24,7 +24,9 @@ void Chorus::set_sample_rate(int sample_rate) {
 void Chorus::process(float* buffer, int num_samples) {
     if (!enabled_) return;
 
-    float rate = params_[0].value;
+    const float alpha = 1.0f - std::exp(-1.0f / (sample_rate_ * 0.020f));
+    smoothed_rate_ += alpha * (params_[0].value - smoothed_rate_);
+    float rate = smoothed_rate_;
     float depth_ms = params_[1].value;
     float level = params_[2].value;
 
@@ -106,6 +108,7 @@ void Chorus::process_stereo(float* left, float* right, int num_samples) {
 }
 
 void Chorus::set_transport_state(float bpm){
+    if(!std::isfinite(bpm) || bpm <= 0.0f)return;
     if(bpm == last_bpm_) return;
     last_bpm_ = bpm;
     //BPM to Hz
