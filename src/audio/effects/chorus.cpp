@@ -105,6 +105,15 @@ void Chorus::process_stereo(float* left, float* right, int num_samples) {
     }
 }
 
+void Chorus::set_transport_state(float bpm){
+    if(bpm == last_bpm_) return;
+    last_bpm_ = bpm;
+    //BPM to Hz
+    float target_rate_hz = bpm / 60.0f;
+    //set knob
+    params_[0].value = clamp(target_rate_hz, params_[0].min_val, params_[0].max_val);
+}
+
 void Chorus::reset() {
     std::fill(delay_buffer_.begin(), delay_buffer_.end(), 0.0f);
     write_pos_ = 0;
