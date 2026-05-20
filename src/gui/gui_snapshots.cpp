@@ -153,21 +153,6 @@ void GuiSnapshots::render() {
             "  Left-click to recall  |  Right-click to save / clear  |  Ctrl+1-4 to recall");
     }
 
-    //Transport and Tempo controls
-    ImGui::SameLine();
-    ImGui::TextUnformatted(" | "); // A clean visual divider
-    ImGui::SameLine();
-    // 2. Tempo Number Field
-    ImGui::SetNextItemWidth(42.5f);
-    float current_bpm = engine_.get_bpm();
-    if (ImGui::InputFloat("BPM", &current_bpm, 0.0f, 0.0f, "%.1f")) {
-        // Clamp the numbers to a safe musical range (40 to 250 BPM)
-        current_bpm = std::clamp(current_bpm, 40.0f, 250.0f);
-        engine_.set_bpm(current_bpm);//set tempo
-        std::printf("Tempo adjusted to: %.1f BPM\n", current_bpm);
-
-    }
-
     ImGui::EndChild();
 }
 } // namespace Amplitron

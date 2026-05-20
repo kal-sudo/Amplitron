@@ -129,7 +129,7 @@ void AudioEngine::process_audio(const float* input, float* output, int frame_cou
                     static_cast<size_t>(frame_count) * sizeof(float));
     }
     //tempo/bpm broadcast
-    float current_bpm = global_bpm_.load(std::memory_order_relaxed);
+    float current_bpm = static_cast<float>(metronome_bpm_);
     for (auto& fx : audio_shadow_effects_) {
         if (fx) {
             fx->set_transport_state(current_bpm);

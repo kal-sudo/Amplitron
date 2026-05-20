@@ -212,9 +212,6 @@ public:
      */
     void set_output_gain(float gain);
 
-    //transport controls
-    float get_bpm() const;
-    void set_bpm(float bpm);
     
     /** @brief Return the current input gain (atomic relaxed read). */
     float get_input_gain() const { return input_gain_.load(std::memory_order_relaxed); }
@@ -314,7 +311,6 @@ private:
     int sample_rate_ = DEFAULT_SAMPLE_RATE;
     int buffer_size_ = DEFAULT_BUFFER_SIZE;
     //global transport
-    std::atomic<float> global_bpm_{120.0f};
     std::atomic<float> input_gain_{1.0f};
     std::atomic<float> output_gain_{0.8f};
     std::atomic<bool> metronome_enabled_state_{false};

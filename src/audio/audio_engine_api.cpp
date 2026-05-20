@@ -96,15 +96,4 @@ bool AudioEngine::copy_analyzer_snapshot(float* input_dest,
     return true;
 }
 
-float AudioEngine::get_bpm() const{
-    return global_bpm_.load(std::memory_order_relaxed);
-}
-
-void AudioEngine::set_bpm(float bpm){
-    if (!std::isfinite(bpm) || bpm <= 0.0f) return;
-    bpm = std::clamp(bpm, 20.0f, 300.0f);
-    //save new tempo
-    global_bpm_.store(bpm, std::memory_order_relaxed);
-}
-
 } // namespace Amplitron
