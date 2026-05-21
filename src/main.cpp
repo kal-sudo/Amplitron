@@ -55,7 +55,9 @@ void signal_handler(int /*signal*/) {
 }
 
 int main(int argc, char* argv[]) {
-    if (Amplitron::handle_cli_args(argc, argv)) {
+    //CLI argument parsing
+    Amplitron::CliOptions cli_opts = Amplitron::handle_cli_args(argc, argv);
+    if(cli_opts.exit_early){
         return 0;
     }
 
