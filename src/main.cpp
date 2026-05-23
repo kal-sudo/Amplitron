@@ -19,6 +19,8 @@
 #include <csignal>
 #include <atomic>
 #include <filesystem>
+#include <thread>
+#include <chrono>
 
 // New includes for Autosave and Recovery
 #include "SessionManager.h"
@@ -117,40 +119,107 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    Amplitron::GuiManager gui(engine);
+
+    if(cli_opts.is_headless){
+        std::cout << "=== HEADLESS MODE ===" << std::endl;
+        std::cout << "Loading preset: " << cli_opts.preset_path << std::endl;
+        
+        //Safe preset injection
+        if (!Amplitron::PresetManager::load_preset(cli_opts.preset_path, engine, nullptr)){
+            std::cerr << "Fatal Error: Could not load preset for headless mode." << std::endl;
+            engine.shutdown();
+            return 1;
+        }
+        //Hardware routing(i/p)
+        if(!cli_opts.input_device.empty()){
+            auto devices = engine.get_input_devices();
+            std::vector<int> match_indices;
+
+            //Searching and storing all matching devices
+            for(size_t i = 0; i < devices.size(); ++i){
+                if (devices[i].name.find(cli_opts.input_device) != std::string::npos){
+                    match_indices.push_back(i);
+                }
+            }
+            
+            if(match_indices.empty()){
+                std::cerr << "Warning: Could not find requested input device: '" << cli_opts.input_device << "'" << std::endl;
+            } else if (match_indices.size() == 1){
+                engine.set_input_device(devices[match_indices[0]].index);
+                std::cout << "Input routed to: " << devices[match_indices[0]].name << std::endl;
+            } else {
+                std::cerr << "Warning: Ambiguous input name '" << cli_opts.input_device << "'. Multiple matches found:" << std::endl;
+                for(int idx : match_indices){
+                    std::cerr << " -- " << devices[idx].name << std::endl;
+                }
+                std::cerr << "Auto-selecting the first match: " << devices[match_indices[0]].name << std::endl;
+                engine.set_input_device(devices[match_indices[0]].index);
+            }
+        }
+        //hardware routing(o/p)
+        if(!cli_opts.output_device.empty()) {
+            auto devices = engine.get_output_devices();
+            std::vector<int> match_indices;
+
+            for(size_t i = 0;i <devices.size(); ++i){
+                if(devices[i].name.find(cli_opts.output_device) != std::string::npos) {
+                    match_indices.push_back(i);
+                }
+            }
+
+            if(match_indices.empty()){
+                std::cerr << "Warning: Could not find requested output device: '" << cli_opts.output_device << "'" << std::endl;
+            } else if(match_indices.size() == 1){
+                engine.set_output_device(devices[match_indices[0]].index);
+                std::cout<< "Output routed to: " << devices[match_indices[0]].name << std::endl;
+            } else{
+                std::cerr << "Warning: Ambiguous output name '" << cli_opts.output_device << "'. Multiple matches found:" <<std::endl;
+                for(int idx : match_indices){
+                    std::cerr << " -- " << devices[idx].name << std::endl;
+                }
+                std::cerr << "Auto-selecting the first match: " << devices[match_indices[0]].name << std::endl;
+                engine.set_output_device(devices[match_indices[0]].index);
+            }
+        }
+
+    } else {
     // Create a small, automatically wired, and highly playable circuit
-    auto cabinet = std::make_shared<Amplitron::CabinetSim>();
-    cabinet->set_enabled(true);
+        auto cabinet = std::make_shared<Amplitron::CabinetSim>();
+        cabinet->set_enabled(true);
 
-    auto amp = std::make_shared<Amplitron::AmpSimulator>();
-    amp->set_enabled(true);
+        auto amp = std::make_shared<Amplitron::AmpSimulator>();
+        amp->set_enabled(true);
 
-    engine.add_initial_effects({cabinet, amp});
+        engine.add_initial_effects({cabinet, amp});
 
-    engine.set_input_gain(0.7f);
+        engine.set_input_gain(0.7f);
 
-    if (sessionManager.hasUnsavedSession()) {
-        if (promptRestoreSession()) {
-            try {
-                nlohmann::json savedState = sessionManager.loadSession();
-                engine.deserialize(savedState);
-            } catch (const nlohmann::json::parse_error& e) {
-                std::cerr << "Autosave file corrupted. Discarding." << std::endl;
+        if (sessionManager.hasUnsavedSession()) {
+            if (promptRestoreSession()) {
+                try {
+                    nlohmann::json savedState = sessionManager.loadSession();
+                    engine.deserialize(savedState);
+                } catch (const nlohmann::json::parse_error& e) {
+                    std::cerr << "Autosave file corrupted. Discarding." << std::endl;
+                    sessionManager.clearSession();
+                }
+            } else {
                 sessionManager.clearSession();
             }
-        } else {
-            sessionManager.clearSession();
+        }
+
+        if (std::filesystem::exists("presets")) {
+            Amplitron::PresetManager::set_presets_dir("presets");
+        }
+
+        if (!gui.initialize(1280, 720)) {
+            std::cerr << "Failed to initialize GUI!" << std::endl;
+            engine.shutdown();
+            return 1;
         }
     }
-    if (std::filesystem::exists("presets")) {
-        Amplitron::PresetManager::set_presets_dir("presets");
-    }
-
-    Amplitron::GuiManager gui(engine);
-    if (!gui.initialize(1280, 720)) {
-        std::cerr << "Failed to initialize GUI!" << std::endl;
-        engine.shutdown();
-        return 1;
-    }
+    
     
     if (!engine.start()) {
         std::cerr << "Warning: Could not start audio stream." << std::endl;
@@ -161,9 +230,19 @@ int main(int argc, char* argv[]) {
     g_gui = &gui;
     emscripten_set_main_loop(em_main_loop, 0, 1);
 #else
-    while (g_running && gui.run_frame()) {
-        if (sessionManager.shouldSave()) {
-            sessionManager.saveSession(engine.serialize());
+    if (cli_opts.is_headless){
+        std::cout << "Audio Engine is running in the background." << std::endl;
+        std::cout << "Press Ctrl+C to shut down." << std::endl;
+        //headless loop
+        while(g_running){
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    } else{
+        //GUI loop
+        while(g_running && gui.run_frame()){
+            if (sessionManager.shouldSave()){
+                sessionManager.saveSession(engine.serialize());
+            }
         }
     }
 #endif
@@ -173,7 +252,9 @@ int main(int argc, char* argv[]) {
 #ifdef __EMSCRIPTEN__
     g_gui = nullptr;
 #endif
-    gui.shutdown();
+    if(!cli_opts.is_headless){ 
+        gui.shutdown();
+    }
     engine.shutdown();
 
     std::cout << "Goodbye!" << std::endl;
