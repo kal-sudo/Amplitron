@@ -32,7 +32,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
             options.exit_early=true;
             return options;
         }
-        else if(arg == "--headless"){
+        else if(arg == "--headless" || arg == "--no-gui"){
             options.is_headless = true;
         }
         //i+1<argc prevents segfault if user does not provide sufficient arguments
@@ -48,7 +48,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
     }
     //Check: can't run headless without a preset.
     if(options.is_headless && options.preset_path.empty()){
-        std::cerr << "Error: --headless mode requires a --preset <path> argument.\n";
+        std::cerr << "Error: --headless/--no-gui mode requires a --preset <path> argument.\n";
         options.exit_early = true;
     }
     return options;

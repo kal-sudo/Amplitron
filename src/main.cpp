@@ -97,6 +97,8 @@ void signal_handler(int /*signal*/) {
 }
 
 int main(int argc, char* argv[]) {
+    //breaks global iostream lock
+    std::cin.tie(nullptr);
     //CLI argument parsing
     Amplitron::CliOptions cli_opts = Amplitron::handle_cli_args(argc, argv);
     if(cli_opts.exit_early){
@@ -230,12 +232,107 @@ int main(int argc, char* argv[]) {
     g_gui = &gui;
     emscripten_set_main_loop(em_main_loop, 0, 1);
 #else
+    std::atomic<bool> show_telemetry{true};
+
     if (cli_opts.is_headless){
         std::cout << "Audio Engine is running in the background." << std::endl;
+        std::cout << "Commands: chain, gain <val>, bypass <idx>, enable <idx>, telemetry <on/off>" << std::endl;
         std::cout << "Press Ctrl+C to shut down." << std::endl;
+
+        //stdin thread to listen commands
+        //no mutex, spsc queue used thus no effect on latency
+        std::thread stdin_listener([&engine, &show_telemetry](){
+            std::string line;
+            //blocks until user interrupts,safe exit when main thread dies
+            while(g_running  && std::getline(std::cin, line)){
+                if(!g_running) break;
+                if(line.empty()) continue;
+
+                if(line.find("gain ") == 0){
+                    try{
+                        float val = std::stof(line.substr(5));
+                        engine.set_output_gain(val);
+                        std::cout << ">> Output gain set to " << val << std::endl;
+                    } catch (...){
+                        std::cout << ">> Invalid gain" << std::endl;
+                    }
+                } else if (line.find("bypass ") == 0){
+                    try {
+                        int idx = std::stoi(line.substr(7));
+                        //push_effect_enabled expects a float(>0.5 is enabled, <0.5 is bypassed)
+                        engine.push_effect_enabled(idx, 0.0f);
+                        std::cout << ">> Effect " << idx << " bypassed." << std::endl;
+                    } catch(...){
+                        std::cout << ">> Invalid index." << std::endl;
+                    }
+                } else if (line.find("enable ") == 0){
+                    try{
+                        int idx = std::stoi(line.substr(7));
+                        engine.push_effect_enabled(idx, 1.0f);
+                        std::cout << ">> Effect " << idx << " enabled." << std::endl;
+                    } catch(...){
+                        std::cout << ">> Invalid index. Try: enable 0" << std::endl;
+                    }
+                } else if (line == "telemetry off"){
+                    show_telemetry.store(false, std::memory_order_relaxed);
+                    std::cout << ">> Telemetry muted. Type 'telemetry on' to resume." << std::endl;
+                }
+                  else if (line == "telemetry on"){
+                    show_telemetry.store(true, std::memory_order_relaxed);
+                    std::cout << ">> Telemetry resumed." << std::endl;
+                } else if (line == "chain"){
+                    std::string chain_str = "\n=== ACTIVE SIGNAL CHAIN ===\n";
+                    
+                    const auto& nodes = engine.graph().get_nodes();
+                    int print_index = 0;
+                    
+                    for (const auto& node : nodes) {
+                        if (node.pedal) { // Only print actual effects
+                            chain_str += "[" + std::to_string(print_index) + "] " + 
+                                         node.pedal->get_display_name() + 
+                                         (node.pedal->is_enabled() ? " (ON)\n" : " (BYPASSED)\n");
+                            print_index++;
+                        }
+                    }
+                    
+                    // If no actual pedals were found in the graph
+                    if (print_index == 0) {
+                        chain_str += "(Chain is empty)\n";
+                    }
+
+                    chain_str += "===========================";
+                    std::cout << chain_str << std::endl;
+                }
+                 else {
+                    std::cout << ">> Unknown command. Available: gain <val>, bypass <idx>, enable <idx>, telemetry <on/off>" << std::endl;
+                }
+            }
+        });
+        stdin_listener.detach();
+
+
+        int loop_counter=0;
+
         //headless loop
         while(g_running){
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            //telemetry logic(activates every 10s)
+            if(++loop_counter >= 100){
+                if(show_telemetry.load(std::memory_order_relaxed)) { 
+                    float dsp_load = engine.get_cpu_load() * 100.0f;
+                    float in_peak = engine.get_input_level();
+                    float out_peak = engine.get_output_level();
+                    std::string dashboard = "\n========================================\n";
+                    dashboard += "Active Buffer Size: " + std::to_string(engine.get_buffer_size()) + 
+                                 " samples @ " + std::to_string(engine.get_sample_rate()) + "Hz\n";
+                    dashboard += "DSP Load: " + std::to_string(dsp_load) + "%\n";
+                    dashboard += "Peak I/O : IN " + std::to_string(in_peak) + " | OUT " + std::to_string(out_peak) + "\n";
+                    dashboard += "========================================\n";
+                    
+                    std::cout << dashboard << std::flush;
+                }
+                loop_counter = 0;//reset timer
+            }
         }
     } else{
         //GUI loop
@@ -258,5 +355,5 @@ int main(int argc, char* argv[]) {
     engine.shutdown();
 
     std::cout << "Goodbye!" << std::endl;
-    return 0;
+    std::_Exit(0);
 }
