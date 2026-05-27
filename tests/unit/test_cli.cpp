@@ -9,7 +9,8 @@ using namespace Amplitron;
 
 TEST(cli_args_no_params_returns_false) {
     char* argv[] = { (char*)"amplitron" };
-    bool exit_req = handle_cli_args(1, argv);
+    Amplitron::CliOptions options = handle_cli_args(1, argv);
+    bool exit_req = options.exit_early;
     ASSERT_FALSE(exit_req);
 }
 
@@ -21,7 +22,8 @@ TEST(cli_args_help_returns_true_and_prints) {
     std::stringstream ss;
     std::cout.rdbuf(ss.rdbuf());
     
-    bool exit_req = handle_cli_args(2, argv);
+    Amplitron::CliOptions options = handle_cli_args(2, argv);
+    bool exit_req = options.exit_early;
     
     // Restore std::cout
     std::cout.rdbuf(old_buf);
@@ -39,7 +41,8 @@ TEST(cli_args_short_help_returns_true) {
     std::stringstream ss;
     std::cout.rdbuf(ss.rdbuf());
     
-    bool exit_req = handle_cli_args(2, argv);
+    Amplitron::CliOptions options = handle_cli_args(2, argv);
+    bool exit_req = options.exit_early;
     
     std::cout.rdbuf(old_buf);
     
@@ -54,7 +57,8 @@ TEST(cli_args_version_returns_true_and_prints) {
     std::stringstream ss;
     std::cout.rdbuf(ss.rdbuf());
     
-    bool exit_req = handle_cli_args(2, argv);
+    Amplitron::CliOptions options = handle_cli_args(2, argv);
+    bool exit_req = options.exit_early;
     
     std::cout.rdbuf(old_buf);
     
@@ -70,7 +74,8 @@ TEST(cli_args_short_version_returns_true) {
     std::stringstream ss;
     std::cout.rdbuf(ss.rdbuf());
     
-    bool exit_req = handle_cli_args(2, argv);
+    Amplitron::CliOptions options = handle_cli_args(2, argv);
+    bool exit_req = options.exit_early;
     
     std::cout.rdbuf(old_buf);
     
@@ -85,7 +90,8 @@ TEST(cli_args_unknown_returns_false) {
     std::stringstream ss;
     std::cout.rdbuf(ss.rdbuf());
     
-    bool exit_req = handle_cli_args(2, argv);
+    Amplitron::CliOptions options = handle_cli_args(2, argv);
+    bool exit_req = options.exit_early;
     
     std::cout.rdbuf(old_buf);
     
@@ -100,7 +106,8 @@ TEST(cli_args_multiple_with_help_returns_true) {
     std::stringstream ss;
     std::cout.rdbuf(ss.rdbuf());
     
-    bool exit_req = handle_cli_args(3, argv);
+    Amplitron::CliOptions options = handle_cli_args(3, argv);
+    bool exit_req = options.exit_early;
     
     std::cout.rdbuf(old_buf);
     
