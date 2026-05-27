@@ -1,5 +1,5 @@
-#include "audio/audio_backend_portaudio_helpers.h"
-#include "audio/audio_engine.h"
+#include "audio/backend/audio_backend_portaudio_helpers.h"
+#include "audio/engine/audio_engine.h"
 #include "test_framework.h"
 #undef Pa_GetDeviceCount
 #undef Pa_GetDeviceInfo
