@@ -1,7 +1,11 @@
 #include "common.h"
 #include "audio/engine/audio_engine.h"
+#ifndef AMPLITRON_HEADLESS
 #include "gui/gui_manager.h"
 #include "gui/state/gui_graph_state.h"
+// New include for Recovery
+#include "gui/crash_recovery_ui.h"
+#endif
 #include "preset_manager.h"
 #include "cli.h"
 
@@ -25,9 +29,8 @@
 #include <mutex>
 #include <vector>
 
-// New includes for Autosave and Recovery
+// New include for Autosave
 #include "session_manager.h"
-#include "gui/crash_recovery_ui.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -208,7 +211,11 @@ int main(int argc, char* argv[]) {
     std::cin.tie(nullptr);
     //CLI argument parsing
     Amplitron::CliOptions cli_opts = Amplitron::handle_cli_args(argc, argv);
+    #ifdef AMPLITRON_HEADLESS
+        cli_opts.is_headless=true;
+    #endif
     if(cli_opts.exit_early){
+        std::cout << "[CLI]Application exited early :" << cli_opts.exit_reason << std::endl;
         return 0;
     }
 
@@ -228,7 +235,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    #ifndef AMPLITRON_HEADLESS
     std::unique_ptr<Amplitron::GuiManager> gui = nullptr;
+    #endif
 
     if(cli_opts.is_headless){
         std::cout << "=== HEADLESS MODE ===" << std::endl;
@@ -292,7 +301,9 @@ int main(int argc, char* argv[]) {
             }
         }
 
-    } else {
+    } 
+    #ifndef AMPLITRON_HEADLESS
+    else {
     // GUI bootup
         gui = std::make_unique<Amplitron::GuiManager>(engine);
     // Create a small, automatically wired, and highly playable circuit
@@ -330,6 +341,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     }
+    #endif
     
     
     if (!engine.start()) {
@@ -450,7 +462,9 @@ int main(int argc, char* argv[]) {
                 loop_counter = 0;//reset timer
             }
         }
-    } else{
+    } 
+    #ifndef AMPLITRON_HEADLESS
+    else{
         //GUI loop
         while(g_running && gui->run_frame()){
             if (sessionManager.shouldSave()){
@@ -458,18 +472,25 @@ int main(int argc, char* argv[]) {
             }
         }
     }
+    #endif
 #endif
 
     // Cleanup
     std::cout << "Shutting down..." << std::endl;
+    
 #ifdef __EMSCRIPTEN__
     g_gui = nullptr;
 #endif
+
+#ifndef AMPLITRON_HEADLESS
     if(!cli_opts.is_headless){ 
         gui->shutdown();
     }
-    engine.shutdown();
+#endif
 
+    sessionManager.clearSession(); 
+    engine.shutdown();
     std::cout << "Goodbye!" << std::endl;
-    std::_Exit(0);
+
+    return 0;
 }

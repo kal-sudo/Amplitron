@@ -1,5 +1,5 @@
 #include "test_framework.h"
-#include "audio/audio_engine.h"
+#include "audio/engine/audio_engine.h"
 #include "audio/effects/noise_gate.h"
 #include "audio/effects/amp_simulator.h"
 #include "cli.h" 

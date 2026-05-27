@@ -11,6 +11,7 @@ struct CliOptions {
     std::string preset_path;
     std::string input_device;
     std::string output_device;
+    std::string exit_reason;
 };
 
 inline CliOptions handle_cli_args(int argc, char* argv[]) {
@@ -25,11 +26,13 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
                       << "\nAudio devices are configured via File -> Settings in the GUI.\n"
                       << "Visit https://github.com/sudip-mondal-2002/Amplitron for docs.\n";
             options.exit_early=true;
+            options.exit_reason="Help Requested";
             return options;
         }
         else if (arg == "--version" || arg == "-v") {
             std::cout << "Amplitron v1.0\n";
             options.exit_early=true;
+            options.exit_reason="Version Requested";
             return options;
         }
         else if(arg == "--headless" || arg == "--no-gui"){
@@ -42,6 +45,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
             } else{
                 std::cerr << "Error: --preset requires a file path argument.\n";
                 options.exit_early = true;
+                options.exit_reason="Preset Field Empty";
                 return options;
             }
         }
@@ -51,6 +55,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
             } else{
                 std::cerr << "Error: --input requires a device name argument.\n";
                 options.exit_early = true;
+                options.exit_reason="Input Field Empty.";
                 return options;
             }
         }
@@ -60,6 +65,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
             }else{
                 std::cerr << "Error: --output requires a device name argument.\n";
                 options.exit_early = true;
+                options.exit_reason="Output Field Empty";
                 return options;
             }
         }
@@ -68,6 +74,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
     if(options.is_headless && options.preset_path.empty()){
         std::cerr << "Error: --headless/--no-gui mode requires a --preset <path> argument.\n";
         options.exit_early = true;
+        options.exit_reason="Insufficient Arguments(no --preset)";
     }
     return options;
 }
