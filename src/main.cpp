@@ -22,6 +22,8 @@
 #include <filesystem>
 #include <thread>
 #include <chrono>
+#include <mutex>
+#include <vector>
 
 // New includes for Autosave and Recovery
 #include "SessionManager.h"
@@ -226,7 +228,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    Amplitron::GuiManager gui(engine);
+    std::unique_ptr<Amplitron::GuiManager> gui = nullptr;
 
     if(cli_opts.is_headless){
         std::cout << "=== HEADLESS MODE ===" << std::endl;
@@ -291,6 +293,8 @@ int main(int argc, char* argv[]) {
         }
 
     } else {
+    // GUI bootup
+        gui = std::make_unique<Amplitron::GuiManager>(engine);
     // Create a small, automatically wired, and highly playable circuit
         auto cabinet = std::make_shared<Amplitron::CabinetSim>();
         cabinet->set_enabled(true);
@@ -320,7 +324,7 @@ int main(int argc, char* argv[]) {
             Amplitron::PresetManager::set_presets_dir("presets");
         }
 
-        if (!gui.initialize(1280, 720)) {
+        if (!gui->initialize(1280, 720)) {
             std::cerr << "Failed to initialize GUI!" << std::endl;
             engine.shutdown();
             return 1;
@@ -334,7 +338,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Amplitron is ready. Let's play!" << std::endl;
 #ifdef __EMSCRIPTEN__
-    g_gui = &gui;
+    g_gui = gui.get();
     emscripten_set_main_loop(em_main_loop, 0, 1);
 #else
     std::atomic<bool> show_telemetry{true};
@@ -344,16 +348,32 @@ int main(int argc, char* argv[]) {
         std::cout << "Commands: chain, gain <val>, bypass <idx>, enable <idx>, telemetry <on/off>" << std::endl;
         std::cout << "Press Ctrl+C to shut down." << std::endl;
 
-        //stdin thread to listen commands
-        //no mutex, spsc queue used thus no effect on latency
-        std::thread stdin_listener([&engine, &show_telemetry](){
-            std::string line;
-            //blocks until user interrupts,safe exit when main thread dies
-            while(g_running  && std::getline(std::cin, line)){
-                if(!g_running) break;
-                if(line.empty()) continue;
+        std::mutex cli_mutex;
+        std::vector<std::string> cli_commands;
 
-                if(line.find("gain ") == 0){
+        //stdin thread to listen commands
+        std::thread stdin_listener([&cli_mutex, &cli_commands](){
+            std::string line;
+            while(std::getline(std::cin, line)){
+                if(line.empty()) continue;
+                std::lock_guard<std::mutex> lock(cli_mutex);
+                cli_commands.push_back(line);
+            }
+        });
+        stdin_listener.detach();
+        int loop_counter=0;
+
+        //headless loop
+        while(g_running){
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::vector<std::string> pending_commands;
+            {
+                std::lock_guard<std::mutex> lock(cli_mutex);
+                std::swap(pending_commands,cli_commands);
+            }
+
+            for(const std::string& line : pending_commands){     
+            if(line.find("gain ") == 0){
                     try{
                         float val = std::stof(line.substr(5));
                         engine.set_output_gain(val);
@@ -412,15 +432,6 @@ int main(int argc, char* argv[]) {
                     std::cout << ">> Unknown command. Available: gain <val>, bypass <idx>, enable <idx>, telemetry <on/off>" << std::endl;
                 }
             }
-        });
-        stdin_listener.detach();
-
-
-        int loop_counter=0;
-
-        //headless loop
-        while(g_running){
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
             //telemetry logic(activates every 10s)
             if(++loop_counter >= 100){
                 if(show_telemetry.load(std::memory_order_relaxed)) { 
@@ -441,7 +452,7 @@ int main(int argc, char* argv[]) {
         }
     } else{
         //GUI loop
-        while(g_running && gui.run_frame()){
+        while(g_running && gui->run_frame()){
             if (sessionManager.shouldSave()){
                 sessionManager.saveSession(engine.serialize());
             }
@@ -455,7 +466,7 @@ int main(int argc, char* argv[]) {
     g_gui = nullptr;
 #endif
     if(!cli_opts.is_headless){ 
-        gui.shutdown();
+        gui->shutdown();
     }
     engine.shutdown();
 

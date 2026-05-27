@@ -36,14 +36,32 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
             options.is_headless = true;
         }
         //i+1<argc prevents segfault if user does not provide sufficient arguments
-        else if(arg == "--preset" && i+1 < argc){
-            options.preset_path = argv[++i];//grabs next word(the preset path)
+        else if(arg == "--preset"){
+            if(i + 1 < argc){ 
+                options.preset_path = argv[++i];//grabs next word(the preset path)
+            } else{
+                std::cerr << "Error: --preset requires a file path argument.\n";
+                options.exit_early = true;
+                return options;
+            }
         }
         else if(arg == "--input" && i+1 < argc){
-            options.input_device = argv[++i];
+            if(i + 1 < argc){ 
+                options.input_device = argv[++i];
+            } else{
+                std::cerr << "Error: --input requires a device name argument.\n";
+                options.exit_early = true;
+                return options;
+            }
         }
         else if(arg == "--output" && i+1 < argc){
-            options.output_device = argv[++i];
+            if(i + 1 < argc){ 
+                options.output_device = argv[++i];
+            }else{
+                std::cerr << "Error: --output requires a device name argument.\n";
+                options.exit_early = true;
+                return options;
+            }
         }
     }
     //Check: can't run headless without a preset.
