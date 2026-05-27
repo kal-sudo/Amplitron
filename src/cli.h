@@ -51,7 +51,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
                 return options;
             }
         }
-        else if(arg == "--input" && i+1 < argc){
+        else if(arg == "--input"){
             if(i + 1 < argc){ 
                 options.input_device = argv[++i];
             } else{
@@ -62,7 +62,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
                 return options;
             }
         }
-        else if(arg == "--output" && i+1 < argc){
+        else if(arg == "--output"){
             if(i + 1 < argc){ 
                 options.output_device = argv[++i];
             }else{
