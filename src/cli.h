@@ -8,6 +8,7 @@ namespace Amplitron {
 struct CliOptions {
     bool exit_early = false;
     bool is_headless = false;
+    int exit_code = 0;
     std::string preset_path;
     std::string input_device;
     std::string output_device;
@@ -45,6 +46,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
             } else{
                 std::cerr << "Error: --preset requires a file path argument.\n";
                 options.exit_early = true;
+                options.exit_code = 1;
                 options.exit_reason="Preset Field Empty";
                 return options;
             }
@@ -55,6 +57,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
             } else{
                 std::cerr << "Error: --input requires a device name argument.\n";
                 options.exit_early = true;
+                options.exit_code = 1;
                 options.exit_reason="Input Field Empty.";
                 return options;
             }
@@ -65,15 +68,18 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
             }else{
                 std::cerr << "Error: --output requires a device name argument.\n";
                 options.exit_early = true;
+                options.exit_code = 1;
                 options.exit_reason="Output Field Empty";
                 return options;
             }
         }
     }
+
     //Check: can't run headless without a preset.
     if(options.is_headless && options.preset_path.empty()){
         std::cerr << "Error: --headless/--no-gui mode requires a --preset <path> argument.\n";
         options.exit_early = true;
+        options.exit_code = 1;
         options.exit_reason="Insufficient Arguments(no --preset)";
     }
     return options;

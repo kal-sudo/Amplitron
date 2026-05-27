@@ -211,12 +211,20 @@ int main(int argc, char* argv[]) {
     std::cin.tie(nullptr);
     //CLI argument parsing
     Amplitron::CliOptions cli_opts = Amplitron::handle_cli_args(argc, argv);
+
     #ifdef AMPLITRON_HEADLESS
-        cli_opts.is_headless=true;
+    cli_opts.is_headless = true;
+    
+    // If the parser didn't already trigger an exit (like --help) validate the preset
+    if (!cli_opts.exit_early && cli_opts.preset_path.empty()) {
+        std::cerr << "Error: Strict headless build requires a --preset <path> argument." << std::endl;
+        return 1; // Return non-zero failure code
+    }
     #endif
+
     if(cli_opts.exit_early){
         std::cout << "[CLI]Application exited early :" << cli_opts.exit_reason << std::endl;
-        return 0;
+        return cli_opts.exit_code;
     }
 
     std::signal(SIGINT, signal_handler);
@@ -488,7 +496,9 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
-    sessionManager.clearSession(); 
+    if(!cli_opts.is_headless) {
+        sessionManager.clearSession(); 
+    }
     engine.shutdown();
     std::cout << "Goodbye!" << std::endl;
 
