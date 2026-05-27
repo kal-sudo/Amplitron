@@ -112,11 +112,14 @@ public:
     /** @brief Return the human-readable output device name. */
     std::string get_output_device_name() const;
 
-
-
     /** @brief Direct access to the effect chain vector (GUI thread only). */
     AudioGraph& graph() { return main_graph_; }
     const AudioGraph& graph() const { return main_graph_; }
+
+#ifdef AMPLITRON_TESTS
+    /** @brief Replace the platform backend in tests. */
+    void replace_backend_for_test(AudioBackendState* backend);
+#endif
 
     // =========================================================================
     // Compatibility bridge: flat effects_ vector for Undo/Redo/Snapshot systems
