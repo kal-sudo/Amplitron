@@ -8,6 +8,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Option to enable JACK backend on Linux
+if(UNIX AND NOT APPLE)
+    set(DEFAULT_WITH_JACK ON)
+else()
+    set(DEFAULT_WITH_JACK OFF)
+endif()
+option(WITH_JACK "Enable JACK audio backend (Linux only)" ${DEFAULT_WITH_JACK})
+
 # Build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -82,6 +90,28 @@ if(NOT PORTAUDIO_FOUND)
               "C:/Program Files/portaudio/lib"
               "${CMAKE_SOURCE_DIR}/external/portaudio/lib")
 endif()
+# pkg_check_modules can populate PORTAUDIO_LIBRARIES with just the library
+# name and PORTAUDIO_LIBRARY_DIRS with the matching prefix path.  Add the
+# directory explicitly so macOS / Homebrew links resolve correctly.
+if(PORTAUDIO_LIBRARY_DIRS)
+    link_directories(${PORTAUDIO_LIBRARY_DIRS})
+endif()
+
+    # JACK (optional, Linux only)
+    if(NOT JACK_LIBRARIES)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(JACK jack)
+        endif()
+        if(NOT JACK_FOUND)
+            find_path(JACK_INCLUDE_DIRS jack/jack.h
+                PATHS /usr/include /usr/local/include)
+            find_library(JACK_LIBRARIES NAMES jack jackserver
+                PATHS /usr/lib /usr/local/lib)
+        endif()
+    endif()
+    if(JACK_LIBRARY_DIRS)
+        link_directories(${JACK_LIBRARY_DIRS})
+    endif()
 
 # SDL2
 if(PkgConfig_FOUND)
@@ -103,6 +133,11 @@ if(NOT SDL2_FOUND)
                   "C:/Program Files/SDL2/lib"
                   "${CMAKE_SOURCE_DIR}/external/SDL2/lib")
     endif()
+endif()
+# pkg_check_modules may provide a bare library name and a matching library
+# directory; add the path explicitly so macOS/Homebrew links resolve.
+if(SDL2_LIBRARY_DIRS)
+    link_directories(${SDL2_LIBRARY_DIRS})
 endif()
 
 # RtMidi (MIDI input)
@@ -243,11 +278,17 @@ elseif(ANDROID)
     set(BACKEND_SOURCES src/audio/backend/audio_backend_oboe.cpp)
     set(DIALOG_SOURCES  src/gui/dialogs/file_dialog_web.cpp)
 else()
-    set(BACKEND_SOURCES
-        src/audio/backend/audio_backend_portaudio.cpp
-        src/audio/backend/audio_backend_portaudio_lifecycle.cpp
-        src/audio/backend/audio_backend_portaudio_devices.cpp
-    )
+    if(WITH_JACK AND UNIX AND NOT APPLE)
+        set(BACKEND_SOURCES
+            src/audio/backend/audio_backend_jack.cpp
+        )
+    else()
+        set(BACKEND_SOURCES
+            src/audio/backend/audio_backend_portaudio.cpp
+            src/audio/backend/audio_backend_portaudio_lifecycle.cpp
+            src/audio/backend/audio_backend_portaudio_devices.cpp
+        )
+    endif()
     set(DIALOG_SOURCES
         src/gui/dialogs/file_dialog_native.cpp
         src/gui/dialogs/file_dialog_native_open.cpp
@@ -478,6 +519,10 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         ${RTMIDI_INCLUDE_DIRS}
     )
 
+    if(WITH_JACK AND UNIX AND NOT APPLE AND JACK_INCLUDE_DIRS)
+        target_include_directories(Amplitron PRIVATE ${JACK_INCLUDE_DIRS})
+    endif()
+
     # ============================================================
     # DEFINE AMPLITRON_HAS_MIDI FOR DESKTOP BUILDS
     # ============================================================
@@ -486,6 +531,10 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         AMPLITRON_HAS_MIDI
     )
 
+    if(WITH_JACK AND UNIX AND NOT APPLE)
+        target_compile_definitions(Amplitron PRIVATE WITH_JACK)
+    endif()
+
     target_link_libraries(Amplitron PRIVATE
         nlohmann_json::nlohmann_json
         ${PORTAUDIO_LIBRARIES}
@@ -493,6 +542,10 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         ${OPENGL_LIBRARIES}
         ${RTMIDI_LIBRARIES}
     )
+
+    if(WITH_JACK AND UNIX AND NOT APPLE)
+        target_link_libraries(Amplitron PRIVATE ${JACK_LIBRARIES})
+    endif()
 
     if(WIN32)
         target_link_libraries(Amplitron PRIVATE winmm ole32 setupapi comdlg32 shell32)
@@ -560,6 +613,8 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         tests/unit/test_session_manager.cpp
         tests/unit/test_cli.cpp
         tests/integration/test_main.cpp
+        tests/integration/test_audio_backend_jack.cpp
+
     )
 
     # Effect + core sources needed by tests (no GUI, no main)
@@ -572,14 +627,14 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         src/audio/engine/audio_engine_chain.cpp
         src/audio/engine/audio_engine_process.cpp
         src/audio/engine/audio_engine_api.cpp
-        src/audio/backend/audio_backend_portaudio.cpp
-        src/audio/backend/audio_backend_portaudio_lifecycle.cpp
-        src/audio/backend/audio_backend_portaudio_devices.cpp
+
+
         src/audio/recorder/recorder.cpp
         src/audio/recorder/recorder_session.cpp
         src/audio/recorder/recorder_io.cpp
         src/audio/recorder/recorder_wav.cpp
         src/gui/commands/command_history.cpp
+
         src/audio/effects/distortion.cpp
         src/audio/effects/overdrive.cpp
         src/audio/effects/delay.cpp
@@ -605,6 +660,18 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         src/audio/engine/audio_graph.cpp
         src/audio/engine/audio_graph_executor.cpp
     )
+
+    if(WITH_JACK AND UNIX AND NOT APPLE)
+        list(APPEND CORE_SOURCES
+            src/audio/backend/audio_backend_jack.cpp
+        )
+    else()
+        list(APPEND CORE_SOURCES
+            src/audio/backend/audio_backend_portaudio.cpp
+            src/audio/backend/audio_backend_portaudio_lifecycle.cpp
+            src/audio/backend/audio_backend_portaudio_devices.cpp
+        )
+    endif()
 
     # Desktop-only MIDI support for tests
     list(APPEND CORE_SOURCES
@@ -664,6 +731,10 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         ${RTMIDI_INCLUDE_DIRS}
     )
 
+    if(WITH_JACK AND UNIX AND NOT APPLE AND JACK_INCLUDE_DIRS)
+        target_include_directories(amplitron-tests PRIVATE ${JACK_INCLUDE_DIRS})
+    endif()
+
     # ============================================================
     # DEFINE AMPLITRON_HAS_MIDI AND AMPLITRON_VERSION FOR TEST BUILDS
     # ============================================================
@@ -671,6 +742,7 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         AMPLITRON_HAS_MIDI
         AMPLITRON_VERSION="${AMPLITRON_VERSION}"
         AMPLITRON_HEADLESS
+        AMPLITRON_TESTS
         SDL_MAIN_HANDLED
         "Pa_GetDeviceCount=MOCK_Pa_GetDeviceCount"
         "Pa_GetDeviceInfo=MOCK_Pa_GetDeviceInfo"
@@ -687,13 +759,23 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         "Pa_Initialize=MOCK_Pa_Initialize"
     )
 
+    if(WITH_JACK AND UNIX AND NOT APPLE)
+        target_compile_definitions(amplitron-tests PRIVATE WITH_JACK)
+    endif()
+
+
     target_link_libraries(amplitron-tests PRIVATE
         nlohmann_json::nlohmann_json
-        ${PORTAUDIO_LIBRARIES}
         ${SDL2_LIBRARIES}
         ${OPENGL_LIBRARIES}
         ${RTMIDI_LIBRARIES}
     )
+
+    if(WITH_JACK AND UNIX AND NOT APPLE)
+        target_link_libraries(amplitron-tests PRIVATE ${JACK_LIBRARIES})
+    else()
+        target_link_libraries(amplitron-tests PRIVATE ${PORTAUDIO_LIBRARIES})
+    endif()
 
     if(WIN32)
         target_link_libraries(amplitron-tests PRIVATE winmm ole32 setupapi)
