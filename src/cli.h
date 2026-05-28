@@ -17,6 +17,9 @@ struct CliOptions {
 
 inline CliOptions handle_cli_args(int argc, char* argv[]) {
     CliOptions options;
+    auto has_value_token = [&](int idx) {
+        return idx < argc && argv[idx] != nullptr && argv[idx][0] != '-';
+    };
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--help" || arg == "-h") {
@@ -41,8 +44,8 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
         }
         //i+1<argc prevents segfault if user does not provide sufficient arguments
         else if(arg == "--preset"){
-            if(i + 1 < argc){ 
-                options.preset_path = argv[++i];//grabs next word(the preset path)
+            if(has_value_token(i + 1)){ 
+                options.preset_path = argv[++i];
             } else{
                 std::cerr << "Error: --preset requires a file path argument.\n";
                 options.exit_early = true;
@@ -52,7 +55,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
             }
         }
         else if(arg == "--input"){
-            if(i + 1 < argc){ 
+            if(has_value_token(i + 1)){ 
                 options.input_device = argv[++i];
             } else{
                 std::cerr << "Error: --input requires a device name argument.\n";
@@ -63,7 +66,7 @@ inline CliOptions handle_cli_args(int argc, char* argv[]) {
             }
         }
         else if(arg == "--output"){
-            if(i + 1 < argc){ 
+            if(has_value_token(i + 1)){ 
                 options.output_device = argv[++i];
             }else{
                 std::cerr << "Error: --output requires a device name argument.\n";
