@@ -596,6 +596,7 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         tests/integration/test_audio_engine.cpp
         tests/integration/test_audio_backend_portaudio.cpp
         tests/integration/test_headless.cpp
+        tests/integration/test_command_graph.cpp
         tests/e2e/test_e2e_preset_workflow.cpp
         tests/ui/test_gui_manager.cpp
         tests/ui/test_pedal_board.cpp
